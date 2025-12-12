@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     Overrides follow Pydantic Settings rules. In tests, you can pass `_env_file`.
     """
 
-    app_env: Environment
+    app_env: Environment = Field(default=Environment.development)
     log_level: str = Field(
         default="info",
         description="Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
