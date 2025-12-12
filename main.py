@@ -1,16 +1,13 @@
 from fastapi import FastAPI
 from pathlib import Path
 import tomllib
+from app.logging import setup_logging
+from app.config import settings
 import logging
 
-# Configure basic logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 
-# Create a logger instance
+# configure logger
+setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -23,7 +20,7 @@ def _load_version() -> str:
     logger.debug(f"Trying to open pyproject from {pyproject_path}")
     with pyproject_path.open("rb") as f:
         data = tomllib.load(f)
-    logger.debug(f" Read data: {data}")
+    logger.debug(f"Read data: {data}")
 
     project_data = data["project"]
     version = project_data["version"]
@@ -31,15 +28,11 @@ def _load_version() -> str:
     return version
 
 
-class _Settings:
-    app_env = "development"
-
-
 @app.get("/")
 async def root():
     """Root endpoint with metadata for quick inspection."""
+    logger.debug("Entering root endpoint")
 
-    message = "ok"
     try:
         app_version = _load_version()
         message = "ok"
@@ -48,13 +41,11 @@ async def root():
         logger.error(f"{e}")
         message = str(e)
 
-    SETTINGS = _Settings()
-
     return {
         "name": "API birthday",
         "version": app_version,
         "message": message,
-        "environment": SETTINGS.app_env,
+        "environment": settings.app_env,
         "docs": "/docs",
         "openapi": "/openapi.json",
     }
