@@ -4,16 +4,25 @@ import tomllib
 from app.logging import setup_logging
 from app.config import settings
 import logging
+from app.database import SessionDep, create_db_and_tables
+from contextlib import asynccontextmanager
 
 
 # configure logger
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_db_and_tables()
+    yield
 
 
-def _load_version() -> str:
+app = FastAPI(lifespan=lifespan)
+
+
+async def _load_version() -> str:
     """Read project version from pyproject.toml."""
     pyproject_path = Path(__file__).parent / "pyproject.toml"
 
@@ -29,12 +38,12 @@ def _load_version() -> str:
 
 
 @app.get("/")
-async def root():
+async def root(session: SessionDep):
     """Root endpoint with metadata for quick inspection."""
     logger.debug("Entering root endpoint")
 
     try:
-        app_version = _load_version()
+        app_version = await _load_version()
         message = "ok"
     except Exception as e:
         app_version = "0.0.0"
