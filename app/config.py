@@ -20,6 +20,7 @@ class Settings(BaseSettings):
         default="info",
         description="Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
     )
+    database_url: str
 
     @field_validator("app_env", mode="before")
     @classmethod
