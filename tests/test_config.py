@@ -9,6 +9,7 @@ def test_settings_defaults_tmp_env(tmp_path: pathlib.Path, monkeypatch: MonkeyPa
     # Ensure env vars are unset
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     # Change to tmp_path to avoid loading project .env
     monkeypatch.chdir(tmp_path)
@@ -17,6 +18,7 @@ def test_settings_defaults_tmp_env(tmp_path: pathlib.Path, monkeypatch: MonkeyPa
 
     assert settings.app_env == Environment.development
     assert settings.log_level == "INFO"
+    assert settings.database_url == "sqlite://"
 
 
 def test_settings_env_overrides(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
@@ -25,6 +27,7 @@ def test_settings_env_overrides(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch
     # Set env vars
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("DATABASE_URL", "sqlite://database.db")
 
     # Change to tmp_path to avoid loading project .env
     monkeypatch.chdir(tmp_path)
@@ -33,6 +36,7 @@ def test_settings_env_overrides(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch
 
     assert settings.app_env == Environment.production
     assert settings.log_level == "DEBUG"
+    assert settings.database_url == "sqlite://database.db"
 
 
 def test_settings_dotenv_file(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
@@ -40,6 +44,7 @@ def test_settings_dotenv_file(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
     # Clear live env
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     # Create a temporary .env
     env_file = tmp_path / ".env"
@@ -48,6 +53,7 @@ def test_settings_dotenv_file(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
             [
                 "APP_ENV=production",
                 "LOG_LEVEL=WARNING",
+                "DATABASE_URL=sqlite://test_db.db",
             ]
         )
     )
@@ -59,3 +65,4 @@ def test_settings_dotenv_file(tmp_path: pathlib.Path, monkeypatch: MonkeyPatch):
 
     assert settings.app_env == Environment.production
     assert settings.log_level == "WARNING"
+    assert settings.database_url == "sqlite://test_db.db"
