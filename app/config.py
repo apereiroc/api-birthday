@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     )
     database_url: str = Field(default="sqlite://")
 
+    def is_dev(self) -> bool:
+        return self.app_env is Environment.development
+
     @field_validator("app_env", mode="before")
     @classmethod
     def normalize_app_env(cls, v: str | Environment) -> str:
@@ -37,7 +40,7 @@ class Settings(BaseSettings):
         v_upper = v.upper()
         allowed = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if v_upper not in allowed:
-            raise ValidationError(f"log_level must be one of {allowed}, got '{v}'")
+            raise ValidationError(f"log_level must be one of {allowed}, got `{v}`")
         return v_upper
 
     # configure `.env` loading and allow missing extra variables

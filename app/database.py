@@ -1,8 +1,9 @@
-from app.config import Environment, settings
-from sqlmodel import Session, SQLModel, create_engine
+from app.config import settings
+from sqlmodel import Session, SQLModel, create_engine, select
 from typing import Annotated
 from fastapi import Depends
 import logging
+from app.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +16,25 @@ if DATABASE_URL.startswith("sqlite"):
 
 # only print DB transactions in development
 # this might be eventually removed...
-is_dev: bool = settings.app_env is Environment.development
+is_dev: bool = settings.is_dev()
 engine = create_engine(DATABASE_URL, echo=is_dev, **kwargs)
 
 
 async def create_db_and_tables():
-    logger.debug("Creating db and tables..")
+    logger.debug("Creating db and tables ...")
     SQLModel.metadata.create_all(engine)
+
+
+async def feed_tables_for_dev():
+    logger.debug("Feeding tables ...")
+    with Session(engine) as session:
+        for i in range(10):
+            result = session.exec(select(User).where(User.telegram_id == i)).first()
+            logger.debug(f"Got result: {result}")
+            if result is None:
+                u = User(telegram_id=i, username="test user")
+                session.add(u)
+        session.commit()
 
 
 async def get_db():

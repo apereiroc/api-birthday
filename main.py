@@ -4,8 +4,10 @@ import tomllib
 from app.logging import setup_logging
 from app.config import settings
 import logging
-from app.database import SessionDep, create_db_and_tables
+from app.database import SessionDep, create_db_and_tables, feed_tables_for_dev
 from contextlib import asynccontextmanager
+from app.routers import user_router
+from app import crud
 
 
 # configure logger
@@ -16,10 +18,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
+    if settings.is_dev():
+        await feed_tables_for_dev()
     yield
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(user_router)
 
 
 async def _load_version() -> str:
@@ -38,7 +44,7 @@ async def _load_version() -> str:
 
 
 @app.get("/")
-async def root(session: SessionDep):
+async def root():
     """Root endpoint with metadata for quick inspection."""
     logger.debug("Entering root endpoint")
 
