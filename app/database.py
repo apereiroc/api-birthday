@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends
 import logging
 from app.models import User
+from faker import Faker
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,17 @@ async def create_db_and_tables():
 async def feed_tables_for_dev():
     logger.debug("Feeding tables ...")
     with Session(engine) as session:
+        faker = Faker()
         for i in range(10):
             result = session.exec(select(User).where(User.telegram_id == i)).first()
             logger.debug(f"Got result: {result}")
             if result is None:
-                u = User(telegram_id=i, username="test user")
+                u = User(
+                    telegram_id=i,
+                    first_name=faker.first_name(),
+                    last_name=faker.last_name(),
+                    username=faker.user_name(),
+                )
                 session.add(u)
         session.commit()
 
