@@ -1,10 +1,11 @@
+from functools import lru_cache
 from fastapi import FastAPI
 from pathlib import Path
 import tomllib
 from app.logging import setup_logging
 from app.config import settings
 import logging
-from app.database import SessionDep, create_db_and_tables, feed_tables_for_dev
+from app.database import create_db_and_tables, feed_tables_for_dev
 from contextlib import asynccontextmanager
 from app.routers import user_router
 from app import crud
@@ -28,19 +29,15 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(user_router)
 
 
-async def _load_version() -> str:
-    """Read project version from pyproject.toml."""
+@lru_cache(maxsize=1)
+def _load_version() -> str:
+    """Read project version from pyproject.toml (cached)."""
     pyproject_path = Path(__file__).parent / "pyproject.toml"
 
-    logger.debug(f"Trying to open pyproject from {pyproject_path}")
     with pyproject_path.open("rb") as f:
         data = tomllib.load(f)
-    logger.debug(f"Read data: {data}")
 
-    project_data = data["project"]
-    version = project_data["version"]
-
-    return version
+    return data["project"]["version"]
 
 
 @app.get("/")
@@ -49,7 +46,7 @@ async def root():
     logger.debug("Entering root endpoint")
 
     try:
-        app_version = await _load_version()
+        app_version = _load_version()
         message = "ok"
     except Exception as e:
         app_version = "0.0.0"
