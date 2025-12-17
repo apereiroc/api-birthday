@@ -1,5 +1,14 @@
-from sqlmodel import SQLModel, Field
+import logging
 from datetime import datetime
+from faker import Faker
+from pydantic import BaseModel as PydanticBaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+
+from app.database import Base, async_session
+
+logger = logging.getLogger(__name__)
 
 
 """
@@ -8,18 +17,29 @@ User models
 """
 
 
-class User(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    telegram_id: int = Field(unique=True, index=True)
-    first_name: str
-    last_name: str | None = None
-    username: str | None = None
-    created_at: datetime = Field(default_factory=datetime.now)
+# class User(SQLModel, table=True):
+#     id: int | None = Field(default=None, primary_key=True)
+#     telegram_id: int = Field(unique=True, index=True)
+#     first_name: str
+#     last_name: str | None = None
+#     username: str | None = None
+#     created_at: datetime = Field(default_factory=datetime.now)
 
-    # persons: list["Person"] = Relationship(back_populates="user", cascade_delete=True)
+# persons: list["Person"] = Relationship(back_populates="user", cascade_delete=True)
 
 
-class UserBase(SQLModel):
+class User(Base):
+    __tablename__ = "user"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(unique=True, index=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(nullable=False)
+    last_name: Mapped[str | None] = mapped_column(default=None, nullable=True)
+    username: Mapped[str | None] = mapped_column(default=None, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class UserBase(PydanticBaseModel):
     first_name: str
     last_name: str | None = None
     username: str | None = None
@@ -34,10 +54,34 @@ class UserCreate(UserBase):
     telegram_id: int
 
 
-class UserUpdate(SQLModel):
+class UserUpdate(PydanticBaseModel):
     first_name: str | None = None
     last_name: str | None = None
     username: str | None = None
+
+
+# utility to insert some data in the tables
+async def feed_tables_for_dev():
+    logger.debug("Feeding tables ...")
+    async with async_session() as session:
+        faker = Faker()
+        # insert some users
+        for i in range(10):
+            result = (
+                (await session.execute(select(User).where(User.telegram_id == i)))
+                .scalars()
+                .first()
+            )
+            logger.debug(f"Got result: {result}")
+            if result is None:
+                u = User(
+                    telegram_id=i,
+                    first_name=faker.first_name(),
+                    last_name=faker.last_name(),
+                    username=faker.user_name(),
+                )
+                session.add(u)
+        await session.commit()
 
 
 # """

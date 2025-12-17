@@ -1,10 +1,16 @@
-from app.config import settings
-from sqlmodel import Session, SQLModel, create_engine, select
-from typing import Annotated
-from fastapi import Depends
 import logging
-from app.models import User
-from faker import Faker
+from collections.abc import AsyncGenerator
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,37 +24,40 @@ if DATABASE_URL.startswith("sqlite"):
 # only print DB transactions in development
 # this might be eventually removed...
 is_dev: bool = settings.is_dev()
-engine = create_engine(DATABASE_URL, echo=is_dev, **kwargs)
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=is_dev,
+    pool_pre_ping=True,
+    **kwargs,
+)
+async_session = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 
-async def create_db_and_tables():
-    logger.debug("Creating db and tables ...")
-    SQLModel.metadata.create_all(engine)
+# create base model for tables
+class Base(DeclarativeBase):
+    pass
 
 
-async def feed_tables_for_dev():
-    logger.debug("Feeding tables ...")
-    with Session(engine) as session:
-        faker = Faker()
-        for i in range(10):
-            result = session.exec(select(User).where(User.telegram_id == i)).first()
-            logger.debug(f"Got result: {result}")
-            if result is None:
-                u = User(
-                    telegram_id=i,
-                    first_name=faker.first_name(),
-                    last_name=faker.last_name(),
-                    username=faker.user_name(),
-                )
-                session.add(u)
-        session.commit()
-
-
-async def get_db():
-    """Dependency to get a database session for each request"""
-    with Session(engine) as session:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session() as session:
         yield session
 
 
+async def close_engine() -> None:
+    logger.info("Disposing database engine")
+    await engine.dispose()
+
+
 # this session dependency can be injected into the endpoints
-SessionDep = Annotated[Session, Depends(get_db)]
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
+
+
+# utility to create database and tables
+async def create_db_and_tables():
+    logger.debug("Creating db and tables ...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
