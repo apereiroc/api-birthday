@@ -1,30 +1,15 @@
 import pytest
-from sqlmodel import Session, create_engine, SQLModel, select
-from sqlmodel.pool import StaticPool
 from app.models import User
 from app.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
-@pytest.fixture(name="engine")
-def engine_fixture():
-    """Create an in-memory SQLite engine for testing."""
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    return engine
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 
-@pytest.fixture(name="session")
-def session_fixture(engine):
-    """Create a database session for testing."""
-    with Session(engine) as session:
-        yield session
-
-
-def test_create_user_in_db(session: Session):
+@pytest.mark.anyio
+async def test_create_user_in_db(session: AsyncSession):
     """Test creating a user in the database."""
     user = User(
         telegram_id=123456789,
@@ -34,87 +19,92 @@ def test_create_user_in_db(session: Session):
     )
 
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
 
     assert user.id is not None
     assert user.telegram_id == 123456789
     assert user.first_name == "John"
 
 
-def test_query_user_by_telegram_id(session: Session):
+@pytest.mark.anyio
+async def test_query_user_by_telegram_id(session: AsyncSession):
     """Test querying a user by telegram_id."""
     user = User(
         telegram_id=987654321,
         first_name="Jane",
     )
     session.add(user)
-    session.commit()
+    await session.commit()
+    await session.refresh(user)
 
     # Query by telegram_id
-    result = session.exec(
-        select(User).where(User.telegram_id == 987654321)
-    ).first()
+    result = await session.execute(select(User).where(User.telegram_id == 987654321))
+    user_result = result.scalar_one_or_none()
 
-    assert result is not None
-    assert result.telegram_id == 987654321
-    assert result.first_name == "Jane"
+    assert user_result is not None
+    assert user_result.telegram_id == 987654321
+    assert user_result.first_name == "Jane"
 
 
-def test_query_nonexistent_user(session: Session):
+@pytest.mark.anyio
+async def test_query_nonexistent_user(session: AsyncSession):
     """Test querying a user that doesn't exist."""
-    result = session.exec(
-        select(User).where(User.telegram_id == 999999999)
-    ).first()
+    result = await session.execute(select(User).where(User.telegram_id == 999999999))
+    user_result = result.scalar_one_or_none()
 
-    assert result is None
+    assert user_result is None
 
 
-def test_update_user(session: Session):
+@pytest.mark.anyio
+async def test_update_user(session: AsyncSession):
     """Test updating a user in the database."""
     user = User(telegram_id=111222333, first_name="Old")
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
 
     # Update
     user.first_name = "New"
     user.last_name = "Name"
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
 
     assert user.first_name == "New"
     assert user.last_name == "Name"
 
 
-def test_delete_user(session: Session):
+@pytest.mark.anyio
+async def test_delete_user(session: AsyncSession):
     """Test deleting a user from the database."""
     user = User(telegram_id=444555666, first_name="ToDelete")
     session.add(user)
-    session.commit()
+    await session.commit()
+    await session.refresh(user)
     user_id = user.id
 
     # Delete
-    session.delete(user)
-    session.commit()
+    await session.delete(user)
+    await session.commit()
 
     # Verify deletion
-    result = session.get(User, user_id)
+    result = await session.get(User, user_id)
     assert result is None
 
 
-def test_unique_telegram_id_constraint(session: Session):
+@pytest.mark.anyio
+async def test_unique_telegram_id_constraint(session: AsyncSession):
     """Test that telegram_id unique constraint is enforced."""
     user1 = User(telegram_id=123, first_name="User1")
     session.add(user1)
-    session.commit()
+    await session.commit()
 
     user2 = User(telegram_id=123, first_name="User2")
     session.add(user2)
 
-    with pytest.raises(Exception):  # IntegrityError
-        session.commit()
+    with pytest.raises(IntegrityError):
+        await session.commit()
 
 
 @pytest.mark.anyio
@@ -123,14 +113,17 @@ async def test_get_db_generator():
     generator = get_db()
     session = await anext(generator)
 
-    assert isinstance(session, Session)
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    assert isinstance(session, AsyncSession)
 
     await generator.aclose()
     with pytest.raises(StopAsyncIteration):
         await anext(generator)
 
 
-def test_query_all_users(session: Session):
+@pytest.mark.anyio
+async def test_query_all_users(session: AsyncSession):
     """Test querying all users."""
     users = [
         User(telegram_id=111, first_name="User1"),
@@ -138,28 +131,28 @@ def test_query_all_users(session: Session):
         User(telegram_id=333, first_name="User3"),
     ]
 
-    for user in users:
-        session.add(user)
-    session.commit()
+    session.add_all(users)
+    await session.commit()
 
-    # Query all
-    results = session.exec(select(User)).all()
+    result = await session.execute(select(User))
+    all_users = result.scalars().all()
 
-    assert len(results) >= 3
-    telegram_ids = [user.telegram_id for user in results]
+    assert len(all_users) >= 3
+    telegram_ids = [u.telegram_id for u in all_users]
     assert 111 in telegram_ids
     assert 222 in telegram_ids
     assert 333 in telegram_ids
 
 
-def test_user_created_at_auto_populated(session: Session):
+@pytest.mark.anyio
+async def test_user_created_at_auto_populated(session: AsyncSession):
     """Test that created_at is automatically set."""
-    user = User(telegram_id=777888999, first_name="Test")
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-
-    assert user.created_at is not None
     from datetime import datetime
 
+    user = User(telegram_id=777888999, first_name="Test")
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    assert user.created_at is not None
     assert isinstance(user.created_at, datetime)

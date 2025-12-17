@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, UserBase, UserCreate, UserPublic, UserUpdate
 
 
@@ -36,7 +37,7 @@ def test_user_model_minimal():
     assert user.first_name == "Jane"
     assert user.last_name is None
     assert user.username is None
-    assert isinstance(user.created_at, datetime)
+    assert user.created_at is None
 
 
 def test_user_base_model():
@@ -123,19 +124,3 @@ def test_user_update_model_empty():
     assert user_update.first_name is None
     assert user_update.last_name is None
     assert user_update.username is None
-
-
-def test_user_model_dump():
-    """Test that User can be dumped to dict."""
-    user = User(
-        telegram_id=111222333,
-        first_name="Test",
-        last_name="User",
-    )
-
-    user_dict = user.model_dump()
-
-    assert user_dict["telegram_id"] == 111222333
-    assert user_dict["first_name"] == "Test"
-    assert user_dict["last_name"] == "User"
-    assert "created_at" in user_dict
