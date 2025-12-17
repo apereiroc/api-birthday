@@ -1,15 +1,17 @@
-from functools import lru_cache
-from fastapi import FastAPI
-from pathlib import Path
-import tomllib
-from app.logging import setup_logging
-from app.config import settings
 import logging
-from app.database import create_db_and_tables, feed_tables_for_dev
+import tomllib
 from contextlib import asynccontextmanager
-from app.routers import user_router
-from app import crud
+from functools import lru_cache
+from pathlib import Path
 
+from fastapi import FastAPI
+
+from app import crud
+from app.config import settings
+from app.database import close_engine, create_db_and_tables
+from app.logging import setup_logging
+from app.models import feed_tables_for_dev
+from app.routers import user_router
 
 # configure logger
 setup_logging(settings.log_level)
@@ -22,6 +24,7 @@ async def lifespan(app: FastAPI):
     if settings.is_dev():
         await feed_tables_for_dev()
     yield
+    await close_engine()
 
 
 app = FastAPI(lifespan=lifespan)
