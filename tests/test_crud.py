@@ -1,27 +1,26 @@
 import pytest
 from fastapi import HTTPException
-from sqlmodel import Session, create_engine, SQLModel
-from sqlmodel.pool import StaticPool
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User, UserCreate, UserPublic
 from app.crud import create_user_if_not_exists
 from app.database import get_db
 
 
-@pytest.fixture(name="session")
-def session_fixture():
-    """Create an in-memory SQLite database for testing."""
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
+# @pytest.fixture(name="session")
+# def session_fixture():
+#     """Create an in-memory SQLite database for testing."""
+#     engine = create_engine(
+#         "sqlite://",
+#         connect_args={"check_same_thread": False},
+#         poolclass=StaticPool,
+#     )
+#     SQLModel.metadata.create_all(engine)
+#     with Session(engine) as session:
+#         yield session
 
 
 @pytest.mark.anyio
-async def test_create_user_success(session: Session):
+async def test_create_user_success(session: AsyncSession):
     """Test creating a new user successfully."""
     user_data = UserCreate(
         telegram_id=123456789,
@@ -41,7 +40,7 @@ async def test_create_user_success(session: Session):
 
 
 @pytest.mark.anyio
-async def test_create_user_minimal_data(session: Session):
+async def test_create_user_minimal_data(session: AsyncSession):
     """Test creating a user with minimal required fields."""
     user_data = UserCreate(
         telegram_id=987654321,
@@ -58,7 +57,7 @@ async def test_create_user_minimal_data(session: Session):
 
 
 @pytest.mark.anyio
-async def test_create_user_duplicate_telegram_id(session: Session):
+async def test_create_user_duplicate_telegram_id(session: AsyncSession):
     """Test that creating a user with duplicate telegram_id raises HTTPException."""
     user_data = UserCreate(
         telegram_id=111222333,
@@ -84,7 +83,7 @@ async def test_create_user_duplicate_telegram_id(session: Session):
 
 
 @pytest.mark.anyio
-async def test_create_multiple_users(session: Session):
+async def test_create_multiple_users(session: AsyncSession):
     """Test creating multiple users with different telegram_ids."""
     users_data = [
         UserCreate(telegram_id=111, first_name="User1"),

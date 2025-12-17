@@ -1,38 +1,55 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, create_engine, SQLModel
-from sqlmodel.pool import StaticPool
-from app.database import get_db
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from app.database import Base, get_db
 from main import app
 
 
-@pytest.fixture(name="session")
-def session_fixture():
-    """Create an in-memory SQLite database for testing."""
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
+from sqlalchemy.ext.asyncio import (
+    async_sessionmaker,
+)
+
+from app.database import Base
 
 
-@pytest.fixture(name="client")
-def client_fixture(session: Session):
-    """Create a test client with database override."""
+# @pytest.fixture(name="session")
+# async def session_fixture():
+#     engine = create_async_engine(
+#         "sqlite+aiosqlite:///:memory:",
+#         connect_args={"check_same_thread": False},
+#     )
+#
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.create_all)
+#
+#     async_session = async_sessionmaker(
+#         bind=engine,
+#         class_=AsyncSession,
+#         expire_on_commit=False,
+#     )
+#
+#     async with async_session() as session:
+#         yield session
+#
+#     await engine.dispose()
 
-    def get_session_override():
-        return session
 
-    app.dependency_overrides[get_db] = get_session_override
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
+# @pytest.fixture(name="client")
+# def client_fixture(session: AsyncSession):
+#     """Create a test client with database override."""
+#
+#     def get_session_override():
+#         return session
+#
+#     app.dependency_overrides[get_db] = get_session_override
+#     client = TestClient(app)
+#     yield client
+#     app.dependency_overrides.clear()
 
 
-def test_root_endpoint(client: TestClient):
+@pytest.mark.anyio
+async def test_root_endpoint(client: TestClient):
     """Test the root endpoint returns metadata."""
     response = client.get("/")
     assert response.status_code == 200
@@ -50,7 +67,8 @@ def test_root_endpoint(client: TestClient):
     assert data["openapi"] == "/openapi.json"
 
 
-def test_create_user_endpoint(client: TestClient):
+@pytest.mark.anyio
+async def test_create_user_endpoint(client: TestClient):
     """Test creating a user through the API."""
     user_data = {
         "telegram_id": 123456789,
@@ -71,7 +89,8 @@ def test_create_user_endpoint(client: TestClient):
     assert "created_at" in data
 
 
-def test_create_user_minimal(client: TestClient):
+@pytest.mark.anyio
+async def test_create_user_minimal(client: TestClient):
     """Test creating a user with minimal data."""
     user_data = {
         "telegram_id": 987654321,
@@ -88,7 +107,8 @@ def test_create_user_minimal(client: TestClient):
     assert data["username"] is None
 
 
-def test_create_user_duplicate(client: TestClient):
+@pytest.mark.anyio
+async def test_create_user_duplicate(client: TestClient):
     """Test that creating duplicate user returns 409."""
     user_data = {
         "telegram_id": 111222333,
@@ -105,7 +125,8 @@ def test_create_user_duplicate(client: TestClient):
     assert response2.json()["detail"] == "User already exists"
 
 
-def test_create_user_invalid_data(client: TestClient):
+@pytest.mark.anyio
+async def test_create_user_invalid_data(client: TestClient):
     """Test creating user with invalid data returns 422."""
     user_data = {
         "first_name": "Bob",
@@ -116,7 +137,8 @@ def test_create_user_invalid_data(client: TestClient):
     assert response.status_code == 422
 
 
-def test_create_user_invalid_telegram_id_type(client: TestClient):
+@pytest.mark.anyio
+async def test_create_user_invalid_telegram_id_type(client: TestClient):
     """Test creating user with wrong telegram_id type."""
     user_data = {
         "telegram_id": "not_an_integer",
@@ -127,7 +149,8 @@ def test_create_user_invalid_telegram_id_type(client: TestClient):
     assert response.status_code == 422
 
 
-def test_openapi_endpoint(client: TestClient):
+@pytest.mark.anyio
+async def test_openapi_endpoint(client: TestClient):
     """Test that OpenAPI schema is accessible."""
     response = client.get("/openapi.json")
     assert response.status_code == 200
@@ -138,14 +161,16 @@ def test_openapi_endpoint(client: TestClient):
     assert "paths" in data
 
 
-def test_docs_endpoint(client: TestClient):
+@pytest.mark.anyio
+async def test_docs_endpoint(client: TestClient):
     """Test that /docs is accessible."""
     response = client.get("/docs")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
 
-def test_create_multiple_users(client: TestClient):
+@pytest.mark.anyio
+async def test_create_multiple_users(client: TestClient):
     """Test creating multiple users."""
     users = [
         {"telegram_id": 111, "first_name": "User1"},
